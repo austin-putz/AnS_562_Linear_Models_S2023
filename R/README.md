@@ -12,6 +12,10 @@ Please also download RStudio to make it easier for you: [RStudio Download](https
 
 You can 'Render' documents from within RStudio after you have Quarto downloaded. 
 
+## Pedigree Folder
+
+Please see the `Pedigree/` folder for needed functions for the relationship matrix R script. 
+
 
 
 
