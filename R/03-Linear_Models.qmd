@@ -1,0 +1,353 @@
+---
+title: "Lab 02: Linear Models"
+author: "Juan Steibel and Austin Putz"
+date: "Feb 01, 2023"
+format:
+  html:
+    embed-resources: true
+    theme: cosmo 
+    toc: true
+    toc-location: left
+    number-depth: 3
+    html-math-method: katex
+    code-fold: false
+---
+
+<br> <br>
+
+## 1. OLS with R
+
+### A. Regression on continuous variables
+
+Let's obtain the OLS of the longley dataset using matrix algebra operations and LM.
+
+```{r}
+
+# load packages
+library(datasets)
+library(Matrix)
+
+# load dataset
+data(longley)
+
+# head
+head(longley)
+
+# y vector
+y <- longley$Employed
+y
+
+# create X
+X <- cbind(1, longley$GNP)
+X
+
+# rank of X
+rankMatrix(X)
+
+# X'X
+XX <- t(X) %*% X
+XX
+
+# (X'X)^-1
+XXi <- solve(XX)
+XXi
+
+# X'y
+Xy <- t(X) %*% y
+
+# b-hat
+beta_hat <- XXi %*% Xy
+
+# residuals (y - Xb)
+ehat <- y - (X %*% beta_hat)
+
+# residual variance (estimate)
+sigma2_e_hat <- sum(ehat^2) / (nrow(X)-ncol(X))
+sigma2_e_hat
+
+# residual standard error (RMSE?)
+sqrt(sigma2_e_hat)
+
+# (X'X)^-1 * sigma^2_e
+var_hat_beta_hat <- sigma2_e_hat*XXi
+var_hat_beta_hat
+
+# standard errors of coefficients
+sqrt(diag(var_hat_beta_hat))
+
+```
+
+Now we can use $lm$ and compare the results
+
+```{r}
+
+# fit model
+srm <- lm(Employed ~ GNP, data=longley)
+
+# rank of X
+srm$rank
+
+# estimated means
+srm$fitted.values
+
+# y-hat
+X %*% beta_hat
+
+# easier comparison
+cbind(
+  srm$fitted.values,
+  predict(srm),
+  X %*% beta_hat
+)
+
+# residuals
+cbind(
+  residuals(srm),
+  ehat
+)
+
+# summary gives a lot of details
+summary(srm)
+
+# but for obtaining regression coefficients, coef(srm is enough)
+coef(srm)
+beta_hat
+
+# error standard deviation is available from summary method
+summary(srm)$sigma
+sqrt(sigma2_e_hat)
+
+# estimated variance-covariance of coefficients
+vcov(srm)
+var_hat_beta_hat
+
+# X'X also available
+summary(srm)$cov.unscaled
+XXi
+
+# QR decomposition
+srm$qr
+
+# QR functions:
+QR <- qr(X)
+QR
+
+Q1 = qr.Q(QR)
+Q1
+R1 = qr.R(QR)
+R1
+
+# solve for coefficients by hand
+solve(R1) %*% t(Q1) %*% y 
+
+# solve for coefficients with QR decomposition
+cf <- qr.coef(QR, y)
+cf
+
+cbind(
+  cf,
+  beta_hat,
+  coef(srm)
+)
+
+```
+
+<br>
+
+### B. Scaled predictors
+
+We mentioned in class that this X matrix may present numerical problems due to very different scales for its columns (regressors) we can create a new variable by scaling the columns, but the intercept can't be scaled.
+
+```{r}
+
+# scale X
+scale(X)
+
+#  scale predictor
+GNP_s <- scale(longley$GNP)
+GNP_s
+
+# check scale
+round(mean(GNP_s), 5)
+var(GNP_s)
+
+```
+
+See Homework for an exercise with scaled X.
+
+<br> <br> <br>
+
+## 2. Computing OLS
+
+In class we learned about the OLS equations $(\boldsymbol{X}^{'}\boldsymbol{X})^{-1}\boldsymbol{X}^{'}\boldsymbol{y}$ and two methods for solving this system: 1) using direct inverse, 2) using the QR decomposition.
+
+In this lab we will compare the two method using simulated data of different sizes according to the following parameters:
+
+```{r}
+
+# simulate (naive) data for regression analyses
+N <- c(100,500,1000,10000) # number of samples
+p <- c(10,50,100,500) # number of regressors
+# all variables uniformly distributed
+
+#a function to simulate data:
+naive_reg<-function(N,p){
+  X <- matrix(runif(N*p), N, p)
+  y <- matrix(runif(N), N, 1)
+  return(list(X=X, y=y))
+}
+
+# test
+s1 <- naive_reg(100,10)
+dim(s1$X)
+length(s1$y)
+
+```
+
+Now we can test this using the microbenchmark package for the direct inverse and for the QR decomposition
+
+```{r}
+library(microbenchmark)
+#continue :)
+
+```
+
+Follow class instructions to pursue some selected combinations and report back to the class and in your homework.
+
+<br> <br> <br>
+
+## 3. Building incidence matrices and solving OLS equations.
+
+The function $model.matrix$ in R can be used to generate incidence matrices.
+
+Use the dataset `npk`. Give a brief explanation of the dataset. Use the model.matrix function to generate incidence matrices for the following models and parameterizations:\
+
+1.  $yield=N+P+K+e$ using corner parameterization.
+
+2.  $yield=block+N+P+K+e$ using corner parameterization
+
+3.  $yield=N+P+K+N \times P+N \times K+K \times P+N \times P \times K+e$ using corner parameterization
+
+4.  $yield=N+P+K+N \times P+N \times K+K \times P+N \times P \times K+e$ using cell mean model
+
+For each model present the incidence matrix $\boldsymbol{X}$, mark the columns corresponding to each factor or model terms, explain how the columns of $\boldsymbol{X}$ were selected to make the matrix full column rank.
+
+```{r include=FALSE}
+
+write_matex2 <- function(x) {
+  options(digits=2)
+  begin <- "\\begin{bmatrix}"
+  end <- "\\end{bmatrix}"
+  X <-
+    apply(x, 1, function(x) {
+      paste(
+        paste(x, collapse = "&"),
+        "\\\\"
+      )
+    })
+  paste(c(begin, X, end), collapse = "")
+}
+
+```
+
+```{r}
+
+# data
+data(npk)
+
+# print first lines
+head(npk)
+
+# print model (design) matrix
+mm1 <- model.matrix(yield~N+P+K,data=npk)
+
+# print
+print(mm1)
+  
+```
+
+$$
+`r write_matex2(mm1)`
+$$ Where:\
+column 1 = intercept,\
+column 2 = N,\
+column 3 = P,\
+column 4 = K,
+
+<br> <br> <br>
+
+## 4. fitting linear models to a real dataset
+
+Work with a dataset from Gualdrón et al. (2014). (doi: 10.1186/1471-2105-15-246)
+
+```{r}
+
+# set working directory
+setwd("~/Documents/ISU/Classes/AnS_562/2023/Part_A/R/")
+
+# read in data
+dts <- read.table("pheno_ready.txt")
+
+# print first rows
+head(dts)
+
+# write data
+# write.table(
+#   x = dts,
+#   file = "swine_data.csv",
+#   quote = FALSE,
+#   sep = ",",
+#   row.names = FALSE,
+#   col.names = TRUE
+# )
+
+```
+
+The columns are: ID: wt_birth: weight at birth car_wt: carcass weight num_ribs: number of ribs car_bf10: back fat depth at the 10th rib car_lma: loin muscle area sex: Barrow vs gilt per_duroc: estimated genomic proportion inherited from Duroc breed sire dam litter slgdt_cd: slaughtering group
+
+-   Select a trait to work with among these:
+
+    -   wt_birth: weight at birth
+
+    -   car_wt: carcass weight
+
+    -   num_ribs: number of ribs
+
+    -   car_bf10: back fat depth at the 10th rib car\_
+
+    -   lma: loin muscle area
+
+-   are there any records that need to be excluded?
+
+-   Discuss with the class/group which covariates/cofactors should be used for modeling
+
+-   Once the candidates are selected, do a brief summary of each of those
+
+-   Pursue variable/model selection using the $lm$ function and related tools
+
+-   Extract incidence matrices and explain each column (hint: only present a few rows if necessary)
+
+<br> <br> <br>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

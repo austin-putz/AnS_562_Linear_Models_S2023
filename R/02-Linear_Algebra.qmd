@@ -1,0 +1,389 @@
+---
+title: "Introduction to Linear Algebra in R"
+author: "Austin Putz"
+date: "Jan 23, 2023"
+self-contained: true
+format:
+  html:
+    theme: cosmo 
+    toc: true
+    toc-location: left
+    number-depth: 3
+    html-math-method: katex
+    code-fold: false
+---
+
+<!-- Set CSS for Style in HTML Markdowns -->
+
+```{css, echo=FALSE}
+h1, h2, h3, h4 {
+  color: #194A8D;
+  text-align: center;
+}
+p {
+  color: grey;
+  font-size: 20px;
+}
+ul, ol {
+  color: grey;
+  font-size: 20px;
+}
+```
+
+<!-- Set Knitr Options -->
+
+```{r}
+#| label: knitr_setup
+#| warning: false
+#| echo: false
+
+# set options for knitr (engine that will render everything)
+knitr::opts_chunk$set(cache      = TRUE,
+                      echo       = TRUE,
+                      warning    = TRUE,
+                      error      = TRUE,
+                      fig.height = 6,
+                      fig.width  = 8,
+                      dpi        = 180
+                      )
+
+
+```
+
+<!-- Setup Code -->
+
+```{r}
+#| label: setup_code 
+#| warning: false 
+#| echo: false 
+
+# remove all objects if restarting script
+rm(list=ls())
+
+# garbage collection (clean memory/RAM)
+#gc()
+
+# print session info (all versions)
+#sessionInfo()
+
+#==============================================================================#
+# Setup Options
+#==============================================================================#
+
+# set tibble width for printing all columns
+options(tibble.width = Inf)
+
+# remove scientific notation
+options(scipen=999)
+
+#==============================================================================#
+# Packages
+#==============================================================================#
+
+# load library
+# if you don't have use 'install.packages("package_name")'
+library(pracma)
+library(psych)
+library(MASS)
+library(Matrix)
+library(tidyverse)
+
+#==============================================================================#
+# Set paths
+#==============================================================================#
+
+# set all paths
+path_main    <- "~/Documents/ISU/Classes/AnS_562/2023/Part_A/R/"
+# path_data    <- paste0(path_main, "Data/")
+# path_plots   <- paste0(path_main, "Plots/")
+# path_output  <- paste0(path_main, "Output/")
+# path_results <- paste0(path_main, "Results/")
+# path_scripts <- paste0(path_main, "Scripts/")
+
+# set working directory
+setwd(path_main)
+
+```
+
+
+
+
+
+
+
+This script should get new students up to speed in R about linear 
+algebra (matrices). 
+
+
+
+
+
+
+
+<br>
+
+## Basic Matrix Code
+
+```{r}
+#| label: matrix_basics
+#| warning: false 
+#| echo: true 
+
+# define a matrix in R
+A = matrix(c(1, 3, 5, 9), byrow=TRUE, nrow=2, ncol=2)
+
+# print A
+A
+
+# or we can use the Matrix package
+Matrix(c(1,3,5,9), nrow=2, ncol=2, byrow=TRUE, sparse=FALSE)
+
+# dim
+dim(A)
+
+# n rows
+nrow(A)
+
+# n columns
+ncol(A)
+
+# subset element 1,2 from A
+A[1, 2]
+
+# subset row 1
+A[1, ]
+
+# add 1 to all elements
+A + 1
+
+# multiply each element by 5
+A * 5
+
+# square each element
+A^2
+
+# get max value within the matrix
+min(A)
+
+# get max value within the matrix
+max(A)
+
+# calc column means
+apply(A, MARGIN = 2, FUN = mean)
+
+# calc row means
+apply(A, MARGIN = 1, FUN = mean)
+
+```
+
+
+
+
+
+
+<br>
+<br>
+
+## Basic Linear Algebra
+
+```{r}
+#| label: elementary_operations
+#| warning: false 
+#| echo: true 
+
+# transpose A matrix
+t(A)
+
+# define B
+B = matrix(c(2, 3, 7, 9), byrow=TRUE, nrow=2, ncol=2)
+
+# print B
+B
+
+# add matrices (element-by-element)
+A + B
+
+# subtract (element-by-element)
+A - B
+
+# multiply them with matrix multiplication
+A %*% B
+
+# multiply element-by-element (NOT matrix multiplication)
+A * B
+
+# combine matrices horizontally
+cbind(A, B)
+
+# combine matrices vertically
+rbind(A, B)
+
+```
+
+
+
+
+
+
+
+<br>
+<br>
+
+## Advanced Linear Algebra
+
+```{r}
+#| label: advanced_operations
+#| warning: false 
+#| echo: true 
+
+# rank of A (from pracma package)
+Rank(A)
+
+# rank of A (from Matrix package)
+rankMatrix(A)
+
+# is it full ranK? (rank should equal the min of # col or # row)
+Rank(A) == min(nrow(A), ncol(A))
+
+# trace of A (base solution)
+sum(diag(A))
+
+# trace of A (from psych package)
+tr(A)
+
+# determinant of A (base)
+det(A)
+
+# inverse of A (from pracma package)
+inv(A)
+
+# inverse of A (base)
+solve(A)
+
+# generalized inverse (from MASS package)
+ginv(A)
+
+# condition of matrix (from pracma package)
+cond(A)
+
+# eigen decomposition of A (base)
+eigen(A)
+
+# extract only values
+eigen(A)$values
+
+# extract only vectors
+eigen(A)$vectors
+
+# cholesky factorization of B - must be positive-definite (from Matrix package)
+Matrix::chol(B)
+
+# A does not have a cholesky factorization because it's not positive-definite
+Matrix::chol(A)
+
+```
+
+
+
+
+
+
+
+
+<br>
+<br>
+
+## Sparse Linear Algebra
+
+Sparse means it contains many 0's, such as a diagonal matrix 
+(e.g. identify matrix). 
+
+```{r}
+#| label: sparse_linear_algebra 
+#| warning: false 
+#| echo: true 
+
+# generate identity matrix (from Matrix package)
+I5 = Diagonal(5)
+
+# print matrix
+I5
+
+# add 2 to each element
+I5 + 2
+
+# multiply by 5
+I5 * 5
+
+# inverse (diag = 1 / 5)
+solve(I5 * 5)
+
+# Sparse matrix
+sparseMatrix = matrix(c(1,0,0, 0,2,0, 0,0,3), byrow=TRUE, nrow=3)
+
+# create sparse matrix
+Matrix(sparseMatrix)
+
+```
+
+
+
+
+## Reading Matrices from File
+
+```{r}
+#| label: reading_in_matrix 
+#| warning: false 
+#| echo: true 
+
+# set seed
+my_seed = "1234"
+
+# sample genotypes
+genotypes = sample(c(0,1,2), 100, replace=TRUE)
+
+# put into matrix
+M = matrix(genotypes, byrow=TRUE, ncol=20)
+
+# write out data frame
+M = data.frame(M)
+
+# write out 
+write.table(
+  x = M,
+  file = paste0(path_main, "M.txt"),
+  sep = ","
+)
+
+# read in M
+M <- read.table(
+  file = paste0(path_main, "M.txt"),
+  sep = ","
+) %>%
+  as.matrix()
+
+# print M
+print(M)
+
+```
+
+NOTE: Faster packages exist for reading files such as `Arrow` contains the
+`read_delim_arrow()` function, `data.table` contains the `fread()` function,
+and `readr` contains `read_delim()` function. In production, I would choose
+one of these written in a low level language (such as C++) for speed and 
+efficiency. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

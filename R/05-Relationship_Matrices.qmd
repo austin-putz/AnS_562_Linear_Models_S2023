@@ -1,0 +1,350 @@
+---
+title: "Relationship Matrices For Animal Breeding"
+author: "Austin Putz"
+date: now
+format: 
+  html:
+    embed-resources: true
+editor: source
+---
+
+
+```{r}
+#| label: startup
+#| warning: true
+#| echo: true
+
+# load packages
+library(Matrix)
+library(pedigree)
+library(pedigreemm)
+library(VIM)
+
+# source functions
+source("~/Documents/Programming/R/Animal_Breeding/Gota_Morota/Pedigrees/createA.R")
+source("~/Documents/Programming/R/Animal_Breeding/Gota_Morota/Pedigrees/createAinv.R")
+source("~/Documents/Programming/R/Animal_Breeding/Gota_Morota/Pedigrees/createD.R")
+source("~/Documents/Programming/R/Animal_Breeding/Gota_Morota/Pedigrees/quass.R")
+
+```
+
+
+
+# Pedigree
+
+Here is the initial pedigree from Chapter 2 in Mrode's Linear Models book. 
+
+```{r}
+#| label: pedigree
+#| warning: true
+#| echo: true
+
+# add base animals
+ped <- data.frame(
+          calf = as.character(c(1, 2, 3, 4, 5, 6)),
+					sire = c(0, 0, 1, 1, 4, 5), 
+					dam  = c(0, 0, 2, 0, 3, 2))
+
+# print ped
+ped
+
+```
+
+REMEMBER: 0 (Zero) is often missing in pedigrees. Programs used to be written in 
+Fortran or C/C++ which didn't naturally handle missing values like R and Julia
+do today! 
+
+
+
+<br>
+<br>
+
+## Calculate A and A Inverse
+
+```{r}
+#| label: create_matrices
+#| warning: true
+#| echo: true
+
+# to use this function we need to make sure that
+#  * pedigree is sorted
+#  * ancestors are added to the top of the pedigree
+#  * missing sires or dams are set to 0
+#  * animals must be coded 1,2,3,...,n (not character values)
+
+# createA Function - sourced above
+A <- createA(ped)
+round(Matrix(A, sparse=TRUE), 3)
+
+# extract inbreeding 
+Fval <- diag(A) - 1
+Fval
+
+# calculate inverse of A
+Ainv <- solve(A)
+round(Matrix(Ainv, sparse=TRUE), 3)
+
+# Use Henderson method with NO inbreeding accounted for! 
+Ainv <- createAinv(ped)
+round(Matrix(Ainv, sparse = TRUE), 3)
+
+# calculate Wrights relationship (IBD relationship)
+cov2cor(A)
+
+```
+
+
+
+<br>
+<br>
+
+## Using pedigreemm package
+
+The `pedigreemm` package is a very nice package for dealing with pedigrees in
+R. We can sort pedigrees, create **A**, **L**, **D**, **A** inverse, etc. 
+
+```{r}
+#| label: use_pedigreemm 
+#| warning: true
+#| echo: true
+
+# pedigree in table 2.1
+ped <- data.frame(calf = as.character(c(3, 4, 5, 6)),
+						sire = c(1, 1, 4, 5), 
+						dam = c(2, NA, 3, 2))
+print(ped)
+
+# pedigreemm - editPed() to add parents to top of pedigree
+ped.edit <- editPed(sire=ped$sire, 
+                    dam=ped$dam, 
+                    label=ped$calf)
+print(ped.edit)
+
+# pedigreemm - pedigree() function to create pedigree S4 object
+ped.complete <- pedigree(
+                  sire  = ped.edit$sire, 
+						      dam   = ped.edit$dam, 
+						      label = ped.edit$label)
+print(ped.complete)
+
+# pedigreemm package functions: 
+#     - getA, getAInv, inbreeding, Dmat, relfactor
+
+# Note: uses Matrix package, why the . for = 0 values
+
+# create A matrix (3rd ed, page 23)
+A <- getA(ped.complete)
+print(A)
+
+# create A inverse (3rd ed, page 27)
+A.inv <- getAInv(ped.complete)
+print(A.inv)
+
+# get inbreeding coefficients (= 1 - diagonal)
+inbred.coefs <- inbreeding(ped.complete)
+print(inbred.coefs)
+
+# D matrix for the A = TDT' equation
+D <- diag(Dmat(ped.complete))
+D
+
+# L' matrix (3rd ed, page 29)
+L <- t(relfactor(ped.complete))
+L
+
+# Verify that A = LL'
+L %*% t(L)
+
+```
+
+<br>
+<br>
+
+## Use pedigree package
+
+```{r}
+#| label: use_pedigree_package 
+#| warning: true
+#| echo: true
+
+# add base animals
+ped <- data.frame(
+          calf = as.character(c(1, 2, 3, 4, 5, 6)),
+					sire = c(0, 0, 1, 1, 4, 5), 
+					dam  = c(0, 0, 2, 0, 3, 2))
+
+# print ped
+ped
+
+# use pedigree function
+vec = c(rep(TRUE, nrow(ped)))
+A = makeA(ped, which=vec)
+
+# must read it back in as data frame
+A.long <- read.table("A.txt", col.names = c("Row", "Column", "Value"))
+
+# print Lower Triangular matrix in row, column, value format
+print(A.long)
+
+```
+
+
+<br>
+<br>
+
+## Calculate L with Quass 1976 Method
+
+```{r}
+#| label: use_quass_L
+#| warning: true
+#| echo: true
+
+# add base animals
+ped <- data.frame(
+          calf = as.character(c(1, 2, 3, 4, 5, 6)),
+					sire = c(0, 0, 1, 1, 4, 5), 
+					dam  = c(0, 0, 2, 0, 3, 2))
+
+# print ped
+ped
+
+# calculate L using Quass
+quassL <- quass(ped$sire, ped$dam)
+
+# pull out L and A-inverse
+quassL$L
+quassL$Ainv
+
+```
+
+
+
+
+
+
+
+
+<br>
+<br>
+
+## Genomics / G Matrix
+
+```{r}
+#| label: data_genomics 
+#| warning: true
+#| echo: true
+
+# set number of animals and labels
+animal = 13:26
+
+# create data frame 
+data.11.1 <- data.frame(animal, 
+			sire  = c(0,0,13,15,15,14,14,14,1,14,14,14,14,14),
+			dam   = c(0,0,4,2,5,6,9,9,3,8,11,10,7,12),
+			mean  = rep(1,length(animal)),
+			EDC   = c(558,722,300,73,52,87,64,103,13,125,93,66,75,33),
+			fat_DYD = c(9.0,13.4,12.7,15.4,5.9,7.7,10.2,4.8,7.6,8.8,9.8,9.2,11.5,13.3),
+			SNP1  = c(2,1,1,0,0,1,0,0,2,0,0,1,0,1),
+			SNP2  = c(0,0,1,0,1,1,0,1,0,0,1,0,0,0),
+			SNP3  = c(1,0,2,2,1,0,1,1,0,0,1,0,0,1),
+			SNP4  = c(1,0,1,1,2,1,1,0,0,1,0,0,1,1),
+			SNP5  = c(0,0,1,0,0,0,0,0,0,1,0,1,1,0),
+			SNP6  = c(0,2,0,1,0,2,2,1,1,2,1,1,2,2),
+			SNP7  = c(0,0,0,0,0,0,0,0,2,0,0,0,0,0),
+			SNP8  = c(2,2,2,2,2,2,2,2,2,2,2,2,2,1),
+			SNP9  = c(1,1,1,2,1,2,2,2,1,0,2,0,1,0),
+			SNP10 = c(2,0,2,1,2,1,0,0,2,0,1,0,0,0))
+
+# A matrix and inverse
+animal <- 1:26
+sire   <- c(rep(0,12), data.11.1$sire)
+dam    <- c(rep(0,12), data.11.1$dam)
+ped    <- data.frame(animal, sire, dam)
+rm(list=c("animal","dam","sire"))
+
+# display pedigree
+print(ped)
+
+# create A matrix + Inverse
+A      <- Matrix(createA(ped))
+A.inv  <- solve(A)
+
+# View Them
+print(A)
+print(A.inv)
+
+# plot A Matrix (from VIM Package)
+matrixplot(as.matrix(A))
+
+# plot A Inverse Matrix (from VIM Package)
+matrixplot(as.matrix(A.inv))
+
+```
+
+
+
+This is from Chapter 11 in Mrode's book. 
+
+```{r}
+#| label: create_G 
+#| warning: true
+#| echo: true
+
+#------------------------------------------------------------------------------#
+# Calculate Partial G matrix for class (first 8 animals)
+#------------------------------------------------------------------------------#
+
+# From Chapter 11 in Mrode
+
+# get SNP matrix (M)
+M <- data.11.1[1:8, 7:16]
+M <- as.matrix(M)
+
+# print M
+M
+
+# calculate column means (2 * allele freq with 0/1/2 coding)
+colMeansM <- colMeans(M)
+
+# allele frequencies
+p <- t(matrix(colMeansM / 2))
+q <- 1 - p
+
+# P = centering matrix
+P <- matrix(rep(colMeansM, nrow(M)), 
+            ncol=ncol(M), 
+            nrow=nrow(M), 
+            byrow=TRUE)
+
+# calculate Z matrix = M - P
+Z <- M - P
+
+# create G = ZZ'/sum(2pq)
+G1 <- Z %*% t(Z)
+G <- G1 / (2*sum(p*q))
+
+# print G
+print(round(G,3))
+
+# plot G (VIM Package)
+matrixplot(as.matrix(G))
+
+# invert G for MME
+#solve(G)
+#error in solve.default(G) :
+#system is computationally singular: reciprocal condition number = 3.06342e-18
+
+# notice G is singular and we cannot invert it!! 
+
+```
+
+
+
+
+
+
+
+
+
+
+
