@@ -1,0 +1,622 @@
+---
+title: "AN S 562A: Intro to Linear Models"
+author: "Juan Steibel"
+format: 
+  revealjs:
+    #embed-resources: true
+    slide-number: true
+    chalkboard: true 
+editor: visual
+output:
+  self_contained: yes
+---
+
+## Learning objectives
+
+-   **Review** basic concepts of linear models
+
+    -   OLS estimates
+
+    -   Incidence matrices
+
+    -   Model selection
+
+    -   Outlier detection
+
+-   **Understand** and **Compare** computational alterntives to obtain OLS and **understand** similarities and differences between OLS to MLE estimates
+
+-   **Apply** R/Julia functions to fit and check linear fixed effects models
+
+## Basic Linear model
+
+$$
+\color{blue}{y_i} = \sum_{j=1}^{p} {\color{red}{x_{ij}} \color{darkgreen}{\beta_j}}+\color{orange}{e_i}
+$$
+
+$$
+E(\color{orange}{e_i}) = 0
+$$ {#eq-res_0}$\color{blue}{y_i}$ observation of response variable,
+
+$\color{red}{x_{ij}}$ : observation of predictor variable, $\color{darkgreen}{\beta_j}$ : linear coefficient $\color{orange}{e_i}$ : residual value In matrix form: $$
+\boldsymbol{\color{blue}y}=\boldsymbol{\color{red}X}\boldsymbol{\color{darkgreen}\beta}+\boldsymbol{\color{orange}e}
+$$ {#eq-LM_matrix}
+
+$rank(\boldsymbol{\color{red}X}) = p$ = matrix is full column rank. Class question.
+
+## Example 1: Longley data (only 6 obs) {.smaller}
+
+```{r}
+
+write_matex <- function(x) {
+  begin <- "$$\\begin{bmatrix}"
+  end <- "\\end{bmatrix}$$"
+  X <-
+    apply(x, 1, function(x) {
+      paste(
+        paste(x, collapse = "&"),
+        "\\\\"
+      )
+    })
+  writeLines(c(begin, X, end))
+}
+
+write_matex2 <- function(x) {
+  options(digits=2)
+  begin <- "\\begin{bmatrix}"
+  end <- "\\end{bmatrix}"
+  X <-
+    apply(x, 1, function(x) {
+      paste(
+        paste(x, collapse = "&"),
+        "\\\\"
+      )
+    })
+  paste(c(begin, X, end), collapse = "")
+}
+
+library(datasets) 
+library(ggplot2)
+data ("longley")
+srm<-lm(Employed~GNP,data=longley)
+
+X<-model.matrix(srm)
+head(longley)
+
+```
+
+$$
+Employed_i=\alpha+GNP_i \beta+ e_i,
+\boldsymbol{y}=`r write_matex2(as.matrix(longley$Employed[1:6]))`, 
+\boldsymbol{X} =`r write_matex2(X[1:6,])` 
+$$
+
+## Model assumptions and chosing $\beta$
+
+$E(\boldsymbol{e}) = 0$, Makes no further distributional assumptions. Then: $E(\boldsymbol{\color{blue}y})=\boldsymbol{\color{red}X}\boldsymbol{\color{darkgreen}\beta}$
+
+What is the best fitting line?
+
+```{r}
+library(datasets) 
+library(ggplot2)
+data ("longley")
+mx<-mean(longley$GNP)
+my<-mean(longley$Employed)
+p1<-ggplot(longley,aes(x=GNP,y=Employed))+geom_point()+geom_smooth(method = "lm")+geom_point(aes(x=mx,y=my),colour="red")
+a=seq(40,80,10)
+b=(my-a)/mx
+print(p1)
+```
+
+## Model assumptions and chosing $\beta$
+
+$E(\boldsymbol{e}) = 0$, Makes no further distributional assumptions. Then: $E(\boldsymbol{\color{blue}y})=\boldsymbol{\color{red}X}\boldsymbol{\color{darkgreen}\beta}$
+
+All these lines produce residuals with expectation 0:
+
+```{r}
+library(datasets) 
+library(ggplot2)
+data ("longley")
+mx<-mean(longley$GNP)
+my<-mean(longley$Employed)
+p1<-ggplot(longley,aes(x=GNP,y=Employed))+geom_point()+geom_smooth(method = "lm")+geom_point(aes(x=mx,y=my),colour="red")
+a=seq(40,80,10)
+b=(my-a)/mx
+print(p1+geom_abline(intercept = a,slope = b,lty="dashed"))
+```
+
+We need another criteria to estimate $\beta$
+
+## Ordinary Least Squares
+
+Set the parameters that minimize this: $SSE=\sum_{i=1} ^n (\hat{e}_i^2) = \boldsymbol{e^{'}}\boldsymbol{e}=(\boldsymbol{y}-\boldsymbol{X}\hat{\boldsymbol{\beta}})^{'}(\boldsymbol{y}-\boldsymbol{X}\hat{\boldsymbol{\beta}})$
+
+```{r}
+srm<-lm(Employed~GNP,data=longley)
+longley$pred<-predict(srm)
+longley$res<-resid(srm)
+ggplot(longley,aes(x=GNP,y=Employed))+geom_point()+geom_smooth(method = "lm")+
+  geom_segment(aes(xend = GNP, yend = pred)) +
+  geom_point(aes(y = pred, color = "red"))
+options(digits=2)
+
+```
+
+This means we need to take the derivative of SSE with respect to $\hat{\boldsymbol{\beta}}$ (not shown).
+
+## Ordinary Least Squares {.smaller}
+
+Set the parameters that minimize this: $SSE = \sum_{i=1} ^n (\hat{e}_i^2) = \boldsymbol{e^{'}}\boldsymbol{e}=(\boldsymbol{y}-\boldsymbol{X}\hat{\boldsymbol{\beta}})^{'}(\boldsymbol{y}-\boldsymbol{X}\hat{\boldsymbol{\beta}})$
+
+This is called ordinary the least squares estimate or OLS of $\boldsymbol{\beta}$ And it computed as follows:
+
+$$\hat{\boldsymbol{\beta}} =(\boldsymbol{X^{'}} \boldsymbol{X})^{-1} \boldsymbol{X^{'}} \boldsymbol{y}
+$$ Thus, the OLS of observations can be written:
+
+$$
+\hat{\boldsymbol{y}}=\boldsymbol{X}\hat{\boldsymbol{\beta}} = \boldsymbol{X}(\boldsymbol{X^{'}} \boldsymbol{X})^{-1} \boldsymbol{X^{'}} \boldsymbol{y} = \boldsymbol{P_{X}}\boldsymbol{y} 
+$$
+
+With $\boldsymbol{P_X}$ = Projection matrix (projects response on column space of predictors in $\boldsymbol{X}$)
+
+This matrix is also called the **Hat matrix** and its diagonal elements are called "leverages", which are used in outlier detection (see slide later).
+
+## Example 1: {.smaller}
+
+```{r}
+
+XX=t(X)%*%X
+XXi=solve(XX)
+y<-as.matrix(longley$Employed)
+xy=t(X)%*%y
+beta_hat=XXi%*%xy
+yhat<-X%*%beta_hat
+```
+
+$$
+\boldsymbol{X^{'}} \boldsymbol{X} = `r  write_matex2(format(XX,digits=2))`,
+\boldsymbol{X^{'}} \boldsymbol{X}^{-1} = `r  write_matex2(format(XXi,digits=2))`
+$$ $$
+\boldsymbol{X}^{'}\boldsymbol{y}=`r write_matex2(format(xy,digits=2))`, 
+\boldsymbol{\hat{\beta}}=`r write_matex2(format(beta_hat,digits=2))` 
+$$ Predicted y is $\boldsymbol{\hat{y}}=\boldsymbol{X}\boldsymbol{\hat{\beta}}$ (10 obs)
+
+$$
+`r write_matex2(t(round(yhat[1:10],1)))`
+$$ Observed y:
+
+$$
+`r write_matex2(t(round(y[1:10],1)))`
+$$
+
+## Properties of the projection matrix
+
+\
+
+$\boldsymbol{P_X}$ is an important matrix in mixed models. It's the projection matrix and we will learn other projection matrices in this course.
+
+-   Symmetric: $\boldsymbol{P_X} = \boldsymbol{P_X^{'}}$
+
+-   Idempotent: $\boldsymbol{P_X} = \boldsymbol{P_X} \boldsymbol{P_X}$
+
+-   $\boldsymbol{P_X} \boldsymbol{X} = \boldsymbol{X}$
+
+-   $rank(\boldsymbol{P_X}) = rank(\boldsymbol{X}) = tr(\boldsymbol{P_X}) = p$
+
+-   $\boldsymbol{\hat{e}}=( \boldsymbol{I}-\boldsymbol{P_X})\boldsymbol{y}$
+
+-   $( \boldsymbol{I}-\boldsymbol{P_X})( \boldsymbol{I}-\boldsymbol{P_X})=( \boldsymbol{I}-\boldsymbol{P_X})$
+
+## Unbiased estimator of the variance
+
+an unbiased estimate of the error variance, $var(\boldsymbol{e})=\sigma^2_e$ is: $$
+\hat{\sigma}_e^2=\frac{\boldsymbol{y}^{'}( \boldsymbol{I}-\boldsymbol{P_X} )\boldsymbol{y}} {n-p}
+$$ Also, note that: $$
+SSE=\boldsymbol{y}^{'}( \boldsymbol{I}-\boldsymbol{P_X} )\boldsymbol{y}
+$$ The proof of this requires a bit of matrix algebra, you are welcome to try it and ask me questions.
+
+## Example 1:
+
+```{r}
+Px<-X%*%XXi%*%t(X)
+I_Px<-diag(nrow(Px))-Px
+SSE<-t(y)%*%I_Px%*%y
+```
+
+$$
+\hat{\sigma}_e^2= `r paste(round(SSE/(nrow(X)-ncol(X)),2))`,
+\hat{\sigma}_e= `r paste(round(sqrt(SSE/(nrow(X)-ncol(X))),2))`,
+\boldsymbol{\hat{\beta}}=`r write_matex2(format(beta_hat,digits=2))`
+$$
+
+```{r}
+print(summary(srm))
+```
+
+## Variance of (linear combinations of) estimates of linear parameters
+
+The variance of $\hat{\boldsymbol{\beta}}$ is: $$
+var(\hat{\boldsymbol{\beta}})=(\boldsymbol{X^{'}X})^{-1}{\sigma}_e^2\\
+var(\boldsymbol{K}\hat{\boldsymbol{\beta}})=\boldsymbol{K}(\boldsymbol{X^{'}X})^{-1}\boldsymbol{K}^{'}{\sigma}_e^2
+$$ where $\boldsymbol{K}$ is a contrast matrix.
+
+Challenge for the class: select $\boldsymbol{K}$ so that $\boldsymbol{K}\hat{\boldsymbol{\beta}}$ is just the $i^{th}$ element of $\hat{\boldsymbol{\beta}}$
+
+Another challenge: in practice, we don't know $\sigma_e^2$ what do we do then?
+
+## Computation of OLS
+
+First: take a look on the OLS equations:
+
+$$\hat{\boldsymbol{\beta}} =(\boldsymbol{X^{'}} \boldsymbol{X})^{-1} \boldsymbol{X^{'}} \boldsymbol{y}
+$$
+
+Note: $(\boldsymbol{X^{'}} \boldsymbol{X})$ is the key matrix and the computational requirements are:
+
+-   To build it through the cross product: $O(n^2p)$
+
+-   To invert it using a standard algoritm: $O(p^3)$
+
+Note: these are upper bounds as more efficient algoritms can be used to take advantage of special cases (symmetry, sparseness, etc).
+
+## OLS and QR decomposition
+
+$$
+\boldsymbol{X}=\boldsymbol{Q} \boldsymbol{R}=\begin{bmatrix}
+\boldsymbol{Q}_1 & \boldsymbol{Q}_2 
+\end{bmatrix}\begin{bmatrix}
+\boldsymbol{R}_1\\ 
+\boldsymbol{0}
+\end{bmatrix}
+$$ Where $\boldsymbol{Q}$ and $\boldsymbol{Q}_1$ are orthogonal matrices and $\boldsymbol{Q}^{-1}=\boldsymbol{Q}^{'}$ and $\boldsymbol{R}_1$ is an upper triangular matrix.\
+
+We can now express $\boldsymbol{X}$ as a function of these matrices: $$
+\boldsymbol{X}=\boldsymbol{Q}_1\boldsymbol{R}_1+\boldsymbol{Q}_2\boldsymbol{0}=\boldsymbol{Q}_1\boldsymbol{R}_1
+$$ Now we can use this expression for obtaining OLS
+
+## OLS and QR decomposition
+
+$$
+\boldsymbol{X}^{'}\boldsymbol{X}=(\boldsymbol{Q}_1 \boldsymbol{R}_1)^{'}\boldsymbol{Q}_1 \boldsymbol{R}_1=\boldsymbol{R}_1^{'}\boldsymbol{Q}_1^{'}\boldsymbol{Q}_1\boldsymbol{R}_1=\boldsymbol{R}_1^{'}\boldsymbol{R}_1
+$$ $$
+(\boldsymbol{X}^{'}\boldsymbol{X})^{-1}= (\boldsymbol{R}_1^{'}\boldsymbol{R}_1)^{-1}=(\boldsymbol{R}_1)^{-1} (\boldsymbol{R}^{'}_1)^{-1}
+$$ $$
+\boldsymbol{X}^{'}\boldsymbol{y}=(\boldsymbol{Q}_1 \boldsymbol{R}_1)^{'}=\boldsymbol{R}_1^{'}\boldsymbol{Q}_1^{'}
+$$ $$
+(\boldsymbol{X}^{'}\boldsymbol{X})^{-1}\boldsymbol{X}^{'}\boldsymbol{y}=\boldsymbol{R}_1^{-1} (\boldsymbol{R}_1^{'})^{-1}\boldsymbol{R_1}^{'}\boldsymbol{Q}_1^{'}\boldsymbol{y}=\boldsymbol{R}_1^{-1}\boldsymbol{Q}_1^{'}\boldsymbol{y}
+$$ There are efficient algorithms to invert triangular matrices. Then, depending on the structure of $\boldsymbol{X}$ and of$\boldsymbol{X}^{'}\boldsymbol{X}$, direct inverse of desomposition may be computationally more convenient.
+
+## Prediction of the mean {.smaller}
+
+Suppose we want to predict the mean response for a specific value of the predictor variables represented in row-vector $\boldsymbol{x}_{new}$: $$
+\bar{\boldsymbol{y}}_{new}=\boldsymbol{x}_{new}\hat{\boldsymbol{\beta}}
+$$ We have the following properties: $$
+\bar{E(\boldsymbol{y}_{new})}=\boldsymbol{X}_{new}{\boldsymbol{\beta}}
+$$ and $$
+var(\bar{\boldsymbol{y}}_{new})=
+\boldsymbol{x}_{new}var(\hat{\boldsymbol{\beta}})\boldsymbol{x}_{new}^{'}=
+\boldsymbol{x}_{new}(\boldsymbol{X^{'}X})^{-1}\boldsymbol{x}_{new}^{'}{\sigma}_e^2
+$$
+
+## Prediction of future observations {.smaller}
+
+Similarly, if we want to predict the future observations for a specific value of the predictor variables represented in row-vector $\boldsymbol{x}_{new}$: $$
+\hat{\boldsymbol{y}}_{new}=\boldsymbol{x}_{new}\hat{\boldsymbol{\beta}}
+$$ We have the following properties: $$
+\hat{E(\boldsymbol{y}_{new})}=\boldsymbol{X}_{new}{\boldsymbol{\beta}}
+$$ and $$
+var(\hat{\boldsymbol{y}}_{new})=
+\boldsymbol{x}_{new}var(\hat{\boldsymbol{\beta}})\boldsymbol{x}_{new}^{'}+var(\boldsymbol{e_i})=
+\boldsymbol{x}_{new}var(\hat{\boldsymbol{\beta}})\boldsymbol{x}_{new}^{'}+{\sigma}_e^2
+$$ $$
+=
+(1+\boldsymbol{x}_{new}(\boldsymbol{X^{'}X})^{-1}\boldsymbol{x}_{new}^{'}){\sigma}_e^2
+$$
+
+Compare this expression to the variance of the expected value: $$
+var(\bar{\boldsymbol{y}}_{new})=
+\boldsymbol{x}_{new}(\boldsymbol{X^{'}X})^{-1}\boldsymbol{x}_{new}^{'}{\sigma}_e^2
+$$
+
+## Example 2: Incidence matrix for classification factors
+
+Tool Growth. Teeth length of guinea pigs with vitamin supplementations: 2 formulations x 3 doses. **10 replicates per group**.
+
+```{r}
+data("ToothGrowth")
+ToothGrowth$dose<-as.factor(ToothGrowth$dose)
+print(head(ToothGrowth))
+m1<-unique(model.matrix(len~dose*supp-1,data=ToothGrowth))[,1:3]
+m2<-unique(model.matrix(len~supp*dose-1,data=ToothGrowth))[,1:2]
+m3<-unique(model.matrix(len~supp:dose-1,data=ToothGrowth))
+cmm<-(model.matrix(len~supp:dose-1,data=ToothGrowth))
+
+inc_f<-cbind(1,m1,m2,m3)
+lm1<-lm(len~supp*dose,data=ToothGrowth)
+inc_res<-model.matrix(lm1)
+```
+
+Let\`s assume that supplement type and dose are classification factors and build incidence matrices for the 2x3 factorial design
+
+## Example 2: not full rank
+
+Incidence matrix for each level combination of both factors $$
+`r write_matex2(as.matrix(unique(ToothGrowth[,-1])))`,
+`r write_matex2(unique(inc_f))`
+$$ This matrix is not full rank.\
+Challenge 1: What columns correspond to each factor?\
+Challenge 2: What is the rank of this matrix?
+
+## Example 2: full rank via corner parameterization
+
+Let's use the corner parameterization to obtain a full rank matrix
+
+$$
+`r write_matex2(as.matrix(unique(ToothGrowth[,-1])))`,
+`r write_matex2(unique(inc_res))`
+$$ Challenge: Explain how the matrix was forced into full rank
+
+## Example 2 alternative full rank
+
+Another alternative is the cell-mean model parametrization: $$
+`r write_matex2(as.matrix(unique(ToothGrowth[,-1])))`,
+`r write_matex2(unique(m3))`
+$$
+
+## Example 2: OLS equations for corner parameterization
+
+$$
+(\boldsymbol{X^{'}X})=`r write_matex2(t(inc_res)%*%inc_res)`
+$$
+
+## Example 2: OLS equations for cell mean model
+
+$$
+(\boldsymbol{X^{'}X})=`r write_matex2(t(cmm)%*%cmm)`
+$$ Challenge: Which one of the two are easier to invert?
+
+## Assuming normality
+
+So far we did not make any parametric assumption. But we can assume that the residuals are Gaussianly independent and identically distributed:
+
+$$
+\boldsymbol{y}=\boldsymbol{X}\boldsymbol{\beta}+\boldsymbol{e}\\
+\boldsymbol{e} \sim N(\boldsymbol{0},\boldsymbol{I}{\sigma}_e^2)
+$$ Under these assumptions, we can obtain the Maximum Likelihood Estimate of the parameters by finding the maximum of the log-likelihood (which is the probability density function of the data seen as a function of the parameters)
+
+## Estimates of parameters under the normal linear model
+
+$$
+\boldsymbol{y}=\boldsymbol{X}\boldsymbol{\beta}+\boldsymbol{e},  
+\boldsymbol{e} \sim N(\boldsymbol{0},\boldsymbol{I}{\sigma}_e^2),
+$$ $$
+\hat{\boldsymbol{\beta}} =(\boldsymbol{X^{'}} \boldsymbol{X})^{-1} \boldsymbol{X^{'}} \boldsymbol{y},
+$$ $$
+\hat{\boldsymbol{\beta}} \sim N({\boldsymbol{\beta}},(\boldsymbol{X^{'}X})^{-1}{\sigma}_e^2)
+$$ $$
+\hat{\sigma}_e^2=\frac{\boldsymbol{y}^{'}( \boldsymbol{I}-\boldsymbol{P_X} )\boldsymbol{y}} {n-p}
+$$ These estimates, variances and expectations coincide with OLS for this model
+
+## Inference with unknown variances
+
+$$
+\hat{\boldsymbol{\beta}} \sim N({\boldsymbol{\beta}},(\boldsymbol{X^{'}X})^{-1}{\sigma}_e^2)
+$$ For a single coefficient: $$
+\hat{\beta_j} \sim N(\beta_j,d_j \sigma_e^2), 
+$$
+
+where $d_j$ is the $i^{th}$ diagonal element of $(\boldsymbol{X^{'}X})^{-1}$. With unknown residual variance: $$
+\hat{\beta_j} \sim t({\beta_j},d_j\hat{\sigma}_e^2,n-p),
+$$
+
+Use to obtain confidence intervals and hypothesis tests for regression coefficients
+
+## Estimation of expected values under the Gaussian GLM
+
+Given a new matrix $\boldsymbol{X}_{new}$, the expected value is: $$
+\hat{E(\boldsymbol{y}_{new})}=\bar{\boldsymbol{y}}_{new}=\boldsymbol{X}_{new}\hat{\boldsymbol{\beta}}
+$$
+
+$$
+\bar{\boldsymbol{y}}_{new} \sim N(\boldsymbol{X}_{new}{\boldsymbol{\beta}},
+\boldsymbol{X}_{new}(\boldsymbol{X^{'}X})^{-1}\boldsymbol{X}_{new}^{'}{\sigma}_e^2)
+$$ This result is used to obtain the confidence band of a regression. And similar to the previous slide, the estimated variance can be replaced and the distribution of a single estimated coefficient will be the student-t distribution.
+
+## Prediction of future observations under the Gaussian Linear Model
+
+$$
+\hat{\boldsymbol{y}}_{new}=\boldsymbol{X}_{new}\hat{\boldsymbol{\beta}}
+$$
+
+$$
+\hat{\boldsymbol{y}}_{new} \sim N(\boldsymbol{X}_{new}{\boldsymbol{\beta}},
+(\boldsymbol{X}_{new}(\boldsymbol{X^{'}X})^{-1}\boldsymbol{X}_{new}^{'}+\boldsymbol{I}){\sigma}_e^2)
+$$ This result is used to obtain the prediction band of a regression.
+
+## Estimating the mean vs predicting future observations
+
+$$
+\bar{\boldsymbol{y}}_{new} \sim N(\boldsymbol{X}_{new}{\boldsymbol{\beta}},
+\boldsymbol{X}_{new}(\boldsymbol{X^{'}X})^{-1}\boldsymbol{X}_{new}^{'}{\sigma}_e^2)
+$$ versus $$
+\hat{\boldsymbol{y}}_{new} \sim N(\boldsymbol{X}_{new}{\boldsymbol{\beta}},
+(\boldsymbol{X}_{new}(\boldsymbol{X^{'}X})^{-1}\boldsymbol{X}_{new}^{'}+\boldsymbol{I}){\sigma}_e^2)
+$$ Class challenge: make at least two observations about these two expressions
+
+## Hypothesis testing
+
+Our goal is not to learn about hypothesis testing for the GLM or for the GLMM. However, we may have to test hypotheses. Here we review BASIC properties regarding hypothesis testing.\
+
+for testing individual coefficients: $$
+\hat{\beta_j} \sim t({\beta_j},(d_j\hat{\sigma}_e^2,n-p),
+$$ where $d_j$ is the $i^{th}$ diagonal element of $\boldsymbol{X^{'}X})^{-1}$.\
+for testing several coefficients at the same time, under the null: $$
+\boldsymbol{K}\hat{\boldsymbol{\beta}}\boldsymbol{K}^{'}\sim F(rank(\boldsymbol{K}),n-p)
+$$ Matrix $\boldsymbol{K}$ is built to represent the corresponding columns of $\boldsymbol{X}$
+
+## Hypothesis testing: Sequential vs Marginal tests {.smaller}
+
+Revisit Example 2: $2 \times 3$ factorial with: Supplement type:$Sup$, dose: $Dose$ and they interaction: "SxD".\
+
+There are two main ways in which we can proceed in this case to test these factors:
+
+::: columns
+::: {.column width="50%"}
+Sequential test (type I)\
+1: $F(Sup|1)$\
+2: $F(Dose|Sup+1)$\
+3: $F(D \times S|Dose+Sup+1)$
+:::
+
+::: {.column width="50%"}
+Marginal test (type III)\
+1:$F(Sup|Dose+D \times S+1)$\
+2:$F(Dose|Sup+D \times S+1)$\
+3:$F(D \times S) Dose+Sup+1)$
+:::
+:::
+
+The main difference between these approches is that the order of testing matters in type I tests. Thus, this is only recommended when the order for columns of $\boldsymbol X$ is pre-specified.\\
+
+A dissadvantage of type III tests is that none of the variables may test as significantly associated to the response variable due to colinearity, thus this may not be a good way of selecting variables either.
+
+## Model selection: statistical approach {.smaller}
+
+It may be very important to all downstream analysis the selection an appropriate model (i.e: relevant columns in $\boldsymbol{X}$).\
+
+The most common way to do this is to fit several competing models and select the "best one" according to a certain criteria.\
+
+The $SSE$ of a model is a measure of the variance in the response that is lest unexplained by the model. Contrarily, $R^2$ is the proportion of variance that is not explained by the model: $$
+R^2 = 1-{SSE \over SSTotal}
+$$
+
+Challente: Are $SSE$ or $R^2$a good criteria for model selection?
+
+## Model selection: statistical approach {.smaller}
+
+The most common statistical approach to model selection in the GLM is to use a function of $SSE$ or $R^2$penalized by model size.
+
+::: columns
+::: {.column width="50%"}
+Mallow's CP $$
+C_p={{SSE_p}\over{MSE_{full}}}-n+2(p+1)
+$$ (smaller is better)
+:::
+
+::: {.column width="50%"}
+Adjusted $R^2$ $$
+1-(1-\boldsymbol{R}^2){{n-1}\over{n-p}}
+$$ (larger is better)
+:::
+:::
+
+These are only two of many model selection criteria. These two model criteria don't require any distributional assumtion beyond what OLS requires. Other criteria such as BIC, AIC, DIC, etc, rely on specific distributional assumptions and are commonly used with likelihood methods.
+
+## Model selection: machine learning approach
+
+Instead of penalizing $SSE$ or $R^2$, the machine learning approach separates data intro training and testing. Models is fit in the training dataset and the model (lack-of-)fit are computed on the testing set.
+
+Challenge: list advantages and disadvantages of the proposed approach.
+
+## Outlier detection: statistical approach {.smaller}
+
+Outliers are values associated with large residuals. The simplest form of outlier detection is a graphic of residuals vs observed values:
+
+```{r}
+p1<-ggplot(longley,aes(x=GNP,y=res))+geom_point()
+print(p1)
+```
+
+However the scale of these residuals is hard to judge. So it's better to produce standardized residuals: $$
+t_i={\hat{e}_i\over \sqrt{var(\hat{e}_i)}}
+$$
+
+## Outlier detection statistical approach {.smaller}
+
+The variance of a residual is a function of the error variance and the diagonal element of the projection matrix $P_X$, also called "hat" matrix: $$
+var(\hat{e}_i)=\sigma_e^2 (1-h_{ii})
+$$ where $h_{ii}$ is the ith diagonal element of $P_X$. If instead of the population variance, an estimate is replaced into the equation, then the residual is called "studentized" instead of standardized.
+
+::: columns
+::: {.column width="50%"}
+Standardized or Studentized follow a Gaussian or student-t distribution: it's easier to judge large values of the residual.
+:::
+
+::: {.column width="50%"}
+```{r}
+longley$stres<-rstandard(srm)
+p1<-ggplot(longley,aes(x=GNP,y=stres))+geom_point()
+print(p1)
+```
+:::
+:::
+
+## Machine learning approach to outlier detection {.smaller}
+
+An approach common to both machine learning and classic analysis consists of computing the standardized residuals for each observation, but using a model fit under leave-one-out cross validation.
+
+This means that the observation in question is dropped from the training set one at a time.
+
+In classic analysis this was often called "external residual approach" and in machine learning it's called leave-one-out residual analysis. The names are used today exchangeably by everyone.
+
+Another procedure commonly used in machine learning is to use a robut model, for instance: quantile regression to compute residuals and their prediction bands.
+
+Quantile regression is outside the scope of this course. But I included an example in the following slides.
+
+## Example: outlier detection with robust regression.
+
+::: columns
+::: {.column width="50%"}
+Problem: with influential outliers, OLS estimate change and some points do not look like outliers anymore
+:::
+
+::: {.column width="50%"}
+![](weights_OLS.jpg){width="437"}
+:::
+:::
+
+## Example: outlier detection with robust regression.
+
+::: columns
+::: {.column width="50%"}
+
+Using Robust regression helps with this problem: notice that the line barely changes when outliers are introduced.
+
+:::
+
+::: {.column width="50%"}
+![](weights_OLS_QR.jpg){width="437"}
+:::
+:::
+
+
+## Example: outlier detection with robust regression.
+
+::: columns
+::: {.column width="50%"}
+But, of course, that depends on the % of outliers.  
+Look at the same experiment when more days are added and the feeder was not recalibrated:  
+
+Example: Animal 1361!
+
+:::
+
+::: {.column width="50%"}
+![](weights_OLS_QR_H.jpg){width="437"}
+:::
+:::
+
+## Example: outlier detection with robust regression.
+
+::: columns
+::: {.column width="50%"}
+With well behaved data everything works... but then, we may not need outlier detection then :)
+
+:::
+
+::: {.column width="50%"}
+![](weights_QR.jpg){width="437"}
+:::
+:::
+
